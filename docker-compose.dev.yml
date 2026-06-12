@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ytdl_db_dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ytdl
+      POSTGRES_PASSWORD: ytdl_password
+      POSTGRES_DB: ytdl_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - ytdl_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: ytdl_redis_dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - ytdl_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ytdl_backend_dev
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://ytdl:ytdl_password@db:5432/ytdl_db
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: dev-secret-key-not-for-production
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: abood123
+      DOWNLOAD_DIR: /app/downloads
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - downloads_dev_data:/app/downloads
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - db
+      - redis
+    networks:
+      - ytdl_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ytdl_frontend_dev
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - ytdl_network
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+  downloads_dev_data:
+
+networks:
+  ytdl_network:
+    driver: bridge
